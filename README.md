@@ -5,7 +5,7 @@ Ubuntu 24.04 image recipes for two kinds of Cindy cloud computer.
 | Image | What it runs | Where to customize it |
 | --- | --- | --- |
 | Host | Cindy Host as a systemd user service, with a per-instance credential store | [Host installer](host/prepare-host-image.py) and [keyring setup](host/host-keyring.sh) |
-| Desktop | Cindy with XFCE, a virtual X11 display and Firefox | [Desktop installer and first-boot settings](desktop/install-desktop.sh) |
+| Desktop | Cindy with XFCE, an authenticated X11 display, Chrome by default and Firefox | [Desktop installer and first-boot settings](desktop/install-desktop.sh) |
 
 Both recipes assume a fresh Ubuntu image with an `ubuntu` user and systemd. Use a trusted Cindy Linux release that supports cloud enrollment and matches the architecture and service environment of the intended guests. Obtain its SHA-256 digest from the approved release record. The image repository contains build instructions and tests. The deployment service owns region-specific image IDs, billing and single-use guest enrollment.
 
@@ -29,7 +29,9 @@ Run the following **inside a disposable Ubuntu 24.04 builder**. Set `DESKTOP_DEB
 sudo bash desktop/install-desktop.sh --prepare-image "$DEB_SHA256" "$DESKTOP_DEB"
 ```
 
-The installer prepares XFCE, Firefox, the credential store and the Cindy autostart entry. Shut down the builder after installation and mount its system disk on a separate Linux machine. On each provisioned guest, the deployment bootstrap calls `/usr/local/lib/cindy-cloud-desktop/activate` with the desired language, display size and timezone, for example `en-US 1920x1080 America/Los_Angeles`. The desktop session and Firefox use the guest user's systemd session bus.
+The installer prepares XFCE, the credential store and the Cindy autostart entry. It installs Google Chrome Stable from Google's signed APT repository and sets the system default for web links. Firefox remains available, alongside a text editor, PDF viewer, archive manager and basic command-line tools. Shut down the builder after installation and mount its system disk on a separate Linux machine. On each provisioned guest, the deployment bootstrap calls `/usr/local/lib/cindy-cloud-desktop/activate` with the desired language, display size and timezone, for example `en-US 1920x1080 America/Los_Angeles`. The desktop session uses the guest user's systemd session bus.
+
+Run the installer from a checkout so it can read [the XFCE defaults and wallpaper](desktop/appearance/README.md). New desktop profiles open with Cindy Whisper, dark window chrome and a bottom panel with Cindy, Chrome, Files and Terminal. Users can customize the appearance from XFCE Settings.
 
 ## Seal and verify
 
@@ -39,7 +41,7 @@ For either edition, seal the **powered-off image** on the separate machine. Use 
 sudo python3 common/seal-offline-image.py --offline-root "$IMAGE_ROOT"
 ```
 
-Sealing rejects known Cindy enrollment files, keyring state and Snap credentials. It clears builder identities, SSH host keys and cloud-init state so each new instance starts with its own identity. Unmount the sealed volume before snapshotting it. Boot a disposable clone to check Host enrollment or the desktop session and Firefox. Record the recipe commit and release digest with each published image in the deployment system.
+Sealing rejects known Cindy enrollment files, keyring state, browser profiles and Snap credentials. It clears builder identities, SSH host keys and cloud-init state so each new instance starts with its own identity. Unmount the sealed volume before snapshotting it. Use the [Cindy readiness checklist](docs/cindy-readiness.md) to validate disposable clones and record the release evidence.
 
 ## Local checks
 
