@@ -9,6 +9,8 @@ Ubuntu 24.04 image recipes for two kinds of Cindy cloud computer.
 
 Both recipes assume a fresh Ubuntu image with an `ubuntu` user and systemd. Use a trusted Cindy Linux release that supports cloud enrollment and matches the architecture and service environment of the intended guests. Obtain its SHA-256 digest from the approved release record. The image repository contains build instructions and tests. The deployment service owns region-specific image IDs, billing and single-use guest enrollment.
 
+For the shared monthly builder, renewal checks and regional image publication, see [builder maintenance](docs/builder-maintenance.md).
+
 ## Prepare a Host image
 
 Install `dbus-user-session`, `gnome-keyring`, `libsecret-tools`, `openssl` and `util-linux` in the clean base image. Shut down the builder and mount its system disk on a separate Linux machine. Set `IMAGE_ROOT` to that mount, `HOST_RELEASE` to the unpacked release directory, and `INVENTORY_SHA256` to the digest of its `SHA256SUMS.json`. Match the edition (`cn` or `global`) and architecture (`x64` or `arm64`) to the release.
@@ -23,7 +25,7 @@ The installer verifies the inventory and every listed file before installing the
 
 ## Prepare a Desktop image
 
-Run the following **inside a disposable Ubuntu 24.04 builder**. Set `DESKTOP_DEB` to the installer path and `DEB_SHA256` to its approved digest. Image preparation changes SSH configuration and installs system packages. Use an out-of-band builder management channel.
+Run the following **on a fresh Ubuntu 24.04 build system**. Set `DESKTOP_DEB` to the installer path and `DEB_SHA256` to its approved digest. Image preparation changes SSH configuration and installs system packages. Use an out-of-band builder management channel.
 
 ```sh
 sudo bash desktop/install-desktop.sh --prepare-image "$DEB_SHA256" "$DESKTOP_DEB"
