@@ -32,6 +32,7 @@ def seal(root):
         ".cindy",
         ".config/Cindy",
         ".config/CindyDev",
+        ".config/CindyGlobal",
         ".config/google-chrome",
         ".cache/google-chrome",
         ".pki/nssdb",

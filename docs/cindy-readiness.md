@@ -11,6 +11,9 @@
 | 浏览器 | Chrome Stable 预装并处理网页链接，Firefox 可选。Cindy 可发现本机 Chrome | 由具体任务安装所需浏览器 |
 | 文件与开发 | Thunar、Mousepad、PDF 查看器、压缩包管理、Git、ripgrep、rsync、curl、jq | 随 Host 制品提供 Node 运行时，项目工具按任务准备 |
 | 语言与显示 | 交付参数决定初始语言、时区和分辨率。预装中文字体和 emoji 字体 | 随 Ubuntu 基础环境 |
+| Cindy 更新 | 系统包由 Cindy 自己更新，无人值守时空闲安装，见下文 | 固定为镜像里的版本 |
+
+桌面版 Cindy 是官方的系统 `.deb`，沿用它自带的 setuid 沙箱。Cindy 更新时通过 `pkexec` 替换系统包；桌面用户本来就有免密 sudo，所以镜像装上 `pkexec`，并用 `/etc/polkit-1/rules.d/49-cindy-cloud-desktop-update.rules` 让桌面用户的 `pkexec` 不再弹出没人能输的密码框，不多给权限。云主机平时没人点「重启以更新」，首次开机的 `activate` 会在 Cindy 启动前为桌面用户写入 `auto-update-settings.json`，打开空闲时自动安装；文件已存在时不改，用户关掉后保持关闭。国内版写在 `~/.config/Cindy`，国际版写在 `~/.config/CindyGlobal`。
 
 Chrome 从 Google 的签名 APT 源安装，信任只用于该源。制镜时会记录浏览器初装版本。用户可修改自己的默认浏览器。Cindy 管理的浏览器配置和用户日常 Chrome 配置都在来宾内首次创建。
 
@@ -34,6 +37,7 @@ Chrome 从 Google 的签名 APT 源安装，信任只用于该源。制镜时会
 - **桌面**。从同账号手机或电脑连接，确认真实画面、点击、滚动、中文输入和双向文本剪贴板。打开一个 PDF、一个 ZIP 和包含中文及 emoji 的网页。重启后重复连接。
 - **桌面外观**。用新建用户配置验证两种交付分辨率下的 Cindy 壁纸、深色窗口和底栏。依次打开 Cindy、Chrome、文件和终端。修改一次主题或壁纸后重启，确认能保留个人设置。
 - **Chrome**。从 Cindy 或终端使用普通 HTTPS 链接打开默认浏览器，检查 Chrome 正常显示真实网页。再用 Cindy 的浏览器工具打开测试页、读取标题、填写表单和下载文件。用 Firefox 再打开同一页作为备用浏览器验收。首次运行出现的浏览器条款由用户处理。
+- **Cindy 更新**。在桌面终端里取 Cindy 主进程号，运行 `pkcheck --action-id org.freedesktop.policykit.exec --process <进程号>`，应直接返回 0、不要求输入密码。确认 `~/.config/Cindy/auto-update-settings.json`（国际版为 `CindyGlobal`）内容为 `{"autoRelaunchOnIdle": true}`、权限 600。客户端发布支持无人值守安装的版本后，再验收空闲时自动装好新版本。
 - **权限与隔离**。确认购买者能操作、其他账号访问失败。撤销远程控制后复测。断开后再连接，确认服务恢复和输入状态正常。检查镜像克隆中没有构建账号、浏览器历史、已有设备身份或调试端口。
 - **交付耗时**。记录从开通到设备可用、首次打开桌面和浏览器的耗时。首次可用以用户能连接、完成操作为准。
 
