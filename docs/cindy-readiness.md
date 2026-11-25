@@ -15,7 +15,7 @@
 
 桌面版 Cindy 是官方的系统 `.deb`，沿用它自带的 setuid 沙箱。Cindy 更新时通过 `pkexec` 替换系统包；桌面用户本来就有免密 sudo，所以镜像装上 `pkexec`，并用 `/etc/polkit-1/rules.d/49-cindy-cloud-desktop-update.rules` 让桌面用户的 `pkexec` 不再弹出没人能输的密码框，不多给权限。云主机平时没人点「重启以更新」，首次开机的 `activate` 会在 Cindy 启动前为桌面用户写入 `auto-update-settings.json`，打开空闲时自动安装；文件已存在时不改，用户关掉后保持关闭。国内版写在 `~/.config/Cindy`，国际版写在 `~/.config/CindyGlobal`。
 
-镜像里的 Cindy 停在制镜时的版本。为了不让新开的机器先打开旧版、用不了多久又因更新重启，每台机器第一次开机时由 `cindy-cloud-desktop-update.service` 先装好最新正式版，桌面会话等它结束再启动 Cindy，最多等 20 分钟。它按镜像里 Cindy 的区域读取国内或国际的更新清单，只接受与已装包同名、同架构、版本号与清单一致的 `.deb`，并核对清单给出的 SHA-256。下载停滞、校验不符或安装失败时保留镜像里的版本，之后交给 Cindy 自己更新。完成后写入 `/var/lib/cindy-cloud-desktop/update.done`，之后开机不再运行；封存镜像时会删除这个标记，原地重装后的新系统盘也会重新检查。
+镜像里的 Cindy 停在制镜时的版本。为了不让新开的机器先打开旧版、用不了多久又因更新重启，每台机器第一次开机时由 `cindy-cloud-desktop-update.service` 先装好最新正式版，桌面会话等它结束再启动 Cindy，最多等 20 分钟。它按镜像里 Cindy 的区域读取国内或国际的更新清单，只接受与已装包同名、同架构、版本号与清单一致的 `.deb`，并核对清单给出的 SHA-256。下载停滞、校验不符或开机 10 分钟内没下载完时保留镜像里的版本，之后交给 Cindy 自己更新。安装只在开机 10 分钟内开始，不会被时限打断；安装失败时 dpkg 会放回旧文件，停在配置阶段的会补完配置。完成后写入 `/var/lib/cindy-cloud-desktop/update.done`，之后开机不再运行；封存镜像时会删除这个标记，原地重装后的新系统盘也会重新检查。
 
 Chrome 从 Google 的签名 APT 源安装，信任只用于该源。制镜时会记录浏览器初装版本。用户可修改自己的默认浏览器。Cindy 管理的浏览器配置和用户日常 Chrome 配置都在来宾内首次创建。
 

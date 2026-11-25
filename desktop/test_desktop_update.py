@@ -28,12 +28,15 @@ class DesktopFirstBootUpdateTest(unittest.TestCase):
 dpkg-query() {
     case $1 in
         -S) [[ $TEST_OWNED == yes ]] && printf '%s: %s\\n' "$TEST_PACKAGE" "$2" ;;
-        -W) printf '%s' "$TEST_INSTALLED" ;;
+        -W) local format=${2#-f=}
+            format=${format//'${Version}'/$TEST_INSTALLED}
+            printf '%s' "${format//'${Status}'/$TEST_STATUS}" ;;
     esac
 }
 dpkg() {
     case $1 in
         --print-architecture) echo amd64 ;;
+        --configure) printf 'dpkg %s\n' "$*" >> "$TEST_CALLS" ;;
         --compare-versions) [[ $(printf '%s\\n%s\\n' "$2" "$4" | sort -V | tail -1) == "$2" && "$2" != "$4" ]] ;;
     esac
 }
@@ -44,12 +47,19 @@ dpkg-deb() {
         Version) echo "$TEST_DEB_VERSION" ;;
     esac
 }
+date() {
+    local tick=0 times=($TEST_TIMES)
+    [[ -f $TEST_CLOCK ]] && tick=$(<"$TEST_CLOCK")
+    echo $(( tick + 1 )) > "$TEST_CLOCK"
+    echo "${times[tick]:-${times[${#times[@]}-1]}}"
+}
 curl() {
     local out= url=
     while [[ $# -gt 0 ]]; do
         case $1 in
             -o) out=$2; shift 2 ;;
-            --max-time|--retry|--connect-timeout|--speed-limit|--speed-time|--proto|--proto-redir) shift 2 ;;
+            --max-time) printf '%s\n' "$2" >> "$TEST_LIMITS"; shift 2 ;;
+            --retry|--connect-timeout|--speed-limit|--speed-time|--proto|--proto-redir) shift 2 ;;
             -*) shift ;;
             *) url=$1; shift ;;
         esac
@@ -96,6 +106,10 @@ apt-get() { printf 'apt-get %s\\n' "$*" >> "$TEST_CALLS"; [[ $TEST_INSTALL_OK ==
             TEST_DEB_PACKAGE="cindy",
             TEST_DEB_VERSION="0.1.147",
             TEST_INSTALL_OK="yes",
+            TEST_STATUS="install ok installed",
+            TEST_TIMES="1000",
+            TEST_CLOCK=str(self.work / "clock"),
+            TEST_LIMITS=str(self.work / "limits"),
         )
         env.update(overrides)
         result = subprocess.run(["bash", "-c", self.script], env=env, capture_output=True, text=True)
@@ -103,6 +117,10 @@ apt-get() { printf 'apt-get %s\\n' "$*" >> "$TEST_CALLS"; [[ $TEST_INSTALL_OK ==
         self.assertTrue((self.state / "update.done").exists(), "The desktop waits for this marker")
         calls = self.calls.read_text().splitlines() if self.calls.exists() else []
         self.calls.unlink(missing_ok=True)
+        limits = Path(env["TEST_LIMITS"])
+        self.limits = limits.read_text().split() if limits.exists() else []
+        limits.unlink(missing_ok=True)
+        Path(env["TEST_CLOCK"]).unlink(missing_ok=True)
         (self.state / "update.done").unlink()
         return calls, result.stdout
 
@@ -123,6 +141,7 @@ apt-get() { printf 'apt-get %s\\n' "$*" >> "$TEST_CALLS"; [[ $TEST_INSTALL_OK ==
                 self.assertIn("-o DPkg::Lock::Timeout=300 install -y --no-install-recommends", install)
                 self.assertTrue(install.endswith("/cindy.deb"))
                 self.assertIn("Installed Cindy 0.1.147, replacing 0.1.146", output)
+                self.assertEqual(self.limits, ["60", "600"], "The download may use the whole install window")
 
     def test_keeps_a_current_release_without_downloading(self):
         self.publish(version="0.1.146")
@@ -149,6 +168,27 @@ apt-get() { printf 'apt-get %s\\n' "$*" >> "$TEST_CALLS"; [[ $TEST_INSTALL_OK ==
                     self.assertEqual(len(self.installs(calls)), 1)
                 else:
                     self.assertEqual(self.installs(calls), [])
+
+    def test_never_starts_replacing_the_package_late(self):
+        self.publish()
+        calls, output = self.run_update(TEST_TIMES="1000 1560")
+        self.assertEqual(len(calls), 1, "Only the manifest is fetched")
+        self.assertIn("No time left to download", output)
+        calls, output = self.run_update(TEST_TIMES="1000 1000 1601")
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(self.installs(calls), [])
+        self.assertIn("Too late to install", output)
+        calls, _ = self.run_update(TEST_TIMES="1000 1300")
+        self.assertEqual(self.limits, ["60", "300"], "A late download only gets the rest of the window")
+        self.assertEqual(len(self.installs(calls)), 1)
+
+    def test_a_failed_install_does_not_leave_the_package_half_configured(self):
+        self.publish()
+        calls, output = self.run_update(TEST_INSTALL_OK="no")
+        self.assertNotIn("dpkg --configure --pending", calls)
+        self.assertIn("Install failed; Cindy is 0.1.146 (install ok installed)", output)
+        calls, _ = self.run_update(TEST_INSTALL_OK="no", TEST_STATUS="install ok half-configured")
+        self.assertEqual(calls[-1], "dpkg --configure --pending")
 
     def test_skips_without_a_manifest_package_or_region(self):
         calls, output = self.run_update()
