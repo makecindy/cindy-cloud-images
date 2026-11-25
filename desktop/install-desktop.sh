@@ -139,9 +139,85 @@ export GNOME_KEYRING_CONTROL
 exec startxfce4
 SESSION
 chmod 755 /usr/local/lib/cindy-cloud-desktop/session
+cat >/usr/local/lib/cindy-cloud-desktop/update <<'UPDATE'
+#!/usr/bin/env bash
+# First boot: install the newest official Cindy before the desktop session starts it, so a new
+# machine neither opens an old release nor restarts into an update soon after. Any failure keeps
+# the release baked into the image; Cindy's own updater installs later releases.
+set -uo pipefail
+state=/var/lib/cindy-cloud-desktop
+build_info=/usr/lib/cindy/resources/linux-build-info
+log() { printf 'cindy-cloud-desktop-update: %s\n' "$*"; }
+install -d -m 755 "$state"
+work=$(mktemp -d)
+# The desktop session waits for this marker, so write it however the attempt ends.
+trap 'rm -rf "$work"; touch "$state/update.done"' EXIT
+trap 'exit 1' TERM INT
+owner=$(dpkg-query -S "$build_info" 2>/dev/null) || { log 'Cindy is not installed from a system package'; exit 0; }
+package=${owner%%:*}
+case $package in cindy|cindydev) ;; *) log 'Unexpected Cindy package'; exit 0 ;; esac
+mapfile -t build < "$build_info"
+# Keep the region of the baked release: China and international builds use separate releases.
+case ${build[3]:-} in
+  cn) cdn=https://hotfix.cindy.com.cn/cindy ;;
+  global) cdn=https://hotfix.cindy.app/cindy ;;
+  *) log 'Unknown Cindy region'; exit 0 ;;
+esac
+debian_arch=$(dpkg --print-architecture)
+case $debian_arch in amd64) arch=x64 ;; arm64) arch=arm64 ;; *) exit 0 ;; esac
+installed=$(dpkg-query -W -f='${Version}' "$package")
+fetch() {
+  curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' \
+    --retry 3 --connect-timeout 15 "$@"
+}
+fetch --max-time 60 "$cdn/manifest-linux-$arch.json" -o "$work/manifest" || { log 'Release manifest unavailable'; exit 0; }
+version=$(jq -er '.app.version | select(test("^[0-9]+[.][0-9]+[.][0-9]+$"))' "$work/manifest") &&
+  file=$(jq -er --arg arch "$arch" '.app.installer.file | select(test("^app/linux-" + $arch + "/[a-zA-Z0-9._-]+[.]deb$"))' "$work/manifest") &&
+  hash=$(jq -er '.app.installer.sha256 | select(test("^[a-f0-9]{64}$"))' "$work/manifest") ||
+  { log 'Unrecognized release manifest'; exit 0; }
+if ! dpkg --compare-versions "$version" gt "$installed"; then
+  log "Cindy $installed is current"
+  exit 0
+fi
+# Abandon a stalled download instead of holding the desktop back.
+fetch --max-time 900 --speed-limit 51200 --speed-time 60 "$cdn/$file" -o "$work/cindy.deb" || { log 'Download failed'; exit 0; }
+actual=$(sha256sum "$work/cindy.deb" | cut -d ' ' -f 1)
+[[ $actual == "$hash" ]] || { log 'Digest mismatch'; exit 0; }
+field() { dpkg-deb --field "$work/cindy.deb" "$1"; }
+if [[ $(field Package) != "$package" || $(field Architecture) != "$debian_arch" || $(field Version) != "$version" ]]; then
+  log 'Package does not match the release manifest'
+  exit 0
+fi
+# A first boot can still hold the package lock for automatic updates.
+DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=300 install -y --no-install-recommends \
+  "$work/cindy.deb" || { log 'Install failed; keeping the baked release'; exit 0; }
+log "Installed Cindy $version, replacing $installed"
+UPDATE
+chmod 755 /usr/local/lib/cindy-cloud-desktop/update
+cat >/etc/systemd/system/cindy-cloud-desktop-update.service <<'UNIT'
+[Unit]
+Description=Install the newest Cindy before the first desktop session
+Wants=network-online.target
+After=network-online.target
+ConditionPathExists=!/var/lib/cindy-cloud-desktop/update.done
+[Service]
+Type=oneshot
+ExecStart=/usr/local/lib/cindy-cloud-desktop/update
+TimeoutStartSec=20min
+[Install]
+WantedBy=multi-user.target
+UNIT
+systemctl enable cindy-cloud-desktop-update.service
 cat >/usr/local/lib/cindy-cloud-desktop/start <<'START'
 #!/usr/bin/env bash
 set -euo pipefail
+# On the first boot, start Cindy only after the newest release is installed (at most 20 minutes).
+if [[ -f /etc/systemd/system/cindy-cloud-desktop-update.service ]]; then
+  for _ in $(seq 600); do
+    [[ -e /var/lib/cindy-cloud-desktop/update.done ]] && break
+    sleep 2
+  done
+fi
 # Snap applications ask the user's systemd manager to create a scope on this bus.
 export DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR:?}/bus"
 exec /usr/bin/xvfb-run --auto-servernum --server-args="-screen 0 ${CINDY_DISPLAY:-1600x1000}x24 -nolisten tcp" /usr/local/lib/cindy-cloud-desktop/session
