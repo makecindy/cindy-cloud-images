@@ -64,6 +64,8 @@ def seal(root):
         checked("var/lib/systemd/random-seed"),
         checked("var/log/cloud-init.log"),
         checked("var/log/cloud-init-output.log"),
+        # Each clone installs the newest Cindy on its own first boot (desktop/install-desktop.sh).
+        checked("var/lib/cindy-cloud-desktop/update.done"),
     ]
     removals.extend(
         checked(str(p.relative_to(root)))
