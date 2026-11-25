@@ -32,6 +32,11 @@ def seal(root):
         ".cindy",
         ".config/Cindy",
         ".config/CindyDev",
+        ".config/google-chrome",
+        ".cache/google-chrome",
+        ".pki/nssdb",
+        ".mozilla/firefox",
+        "snap/firefox",
         ".ssh/cindy-owner-authorized-keys",
     ):
         if checked(str(owner.relative_to(root) / name)).exists():

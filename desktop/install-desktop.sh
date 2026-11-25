@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Run as root on a fresh Ubuntu machine. The no-argument path installs and starts the desktop.
 set -euo pipefail
+desktop_dir="$(dirname -- "${BASH_SOURCE[0]}")"
 prepare_only=false
 if [[ $# -ne 0 ]]; then
   if [[ $# -lt 2 || $# -gt 3 || $1 != --prepare-image || ! $2 =~ ^[a-f0-9]{64}$ ]]; then
@@ -31,11 +32,45 @@ exec 9>/run/lock/cindy-cloud-desktop-install
 flock 9
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
-apt-get install -y --no-install-recommends xfce4 xfce4-terminal dbus-x11 dbus-user-session xauth xvfb x11-utils openssl gnome-keyring libsecret-tools at-spi2-core curl jq ca-certificates libgl1-mesa-dri fonts-noto-cjk locales tzdata firefox
+apt-get install -y --no-install-recommends \
+  xfce4 xfce4-terminal greybird-gtk-theme papirus-icon-theme \
+  mousepad evince file-roller xdg-utils \
+  dbus-x11 dbus-user-session libglib2.0-bin xauth xvfb x11-utils xclip xdotool \
+  openssl gnome-keyring libsecret-tools at-spi2-core libxtst6 \
+  curl jq ca-certificates gpg gpg-agent libgl1-mesa-dri \
+  fonts-noto-cjk fonts-noto-color-emoji locales tzdata firefox \
+  git rsync ripgrep unzip zip
 locale-gen en_US.UTF-8 zh_CN.UTF-8
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 chmod 755 "$work"
+chrome_home="$work/google-gnupg"
+install -d -m 700 "$chrome_home"
+curl --fail --silent --show-error --retry 3 \
+  https://dl.google.com/linux/linux_signing_key.pub -o "$work/google.asc"
+gpg --batch --homedir "$chrome_home" --import "$work/google.asc"
+# Export only Google's active primary key and its signing subkeys.
+google_key=EB4C1BFD4F042F6DDDCCEC917721F63BD38B4796
+gpg --batch --homedir "$chrome_home" --export "$google_key" > "$work/google-chrome.gpg"
+test -s "$work/google-chrome.gpg"
+install -d -m 755 /etc/apt/keyrings
+install -m 644 "$work/google-chrome.gpg" /etc/apt/keyrings/cindy-google-chrome.gpg
+cat >/etc/apt/sources.list.d/google-chrome.sources <<CHROME
+Types: deb
+URIs: https://dl.google.com/linux/chrome/deb/
+Suites: stable
+Components: main
+Architectures: $(dpkg --print-architecture)
+Signed-By: /etc/apt/keyrings/cindy-google-chrome.gpg
+CHROME
+# The vendor's install hook otherwise adds its own APT source and key.
+cat >/etc/default/google-chrome <<'CHROME'
+repo_add_once="false"
+repo_reenable_on_distupgrade="false"
+CHROME
+apt-get update -qq
+apt-get install -y --no-install-recommends google-chrome-stable
+dpkg-query -W -f='${Version}\n' google-chrome-stable > "$work/chrome.version"
 if [[ $prepare_only = true && $# -eq 3 ]]; then
   hash=$2
   install -m 644 -- "$3" "$work/cindy.deb"
@@ -54,12 +89,30 @@ echo "$hash  $work/cindy.deb" | sha256sum --check --status
 package_name=$(dpkg-deb --field "$work/cindy.deb" Package)
 case $package_name in cindy|cindydev) ;; *) echo 'Unexpected Cindy desktop package' >&2; exit 1 ;; esac
 apt-get install -y "$work/cindy.deb"
+bash "$desktop_dir/install-appearance.sh" "/usr/share/applications/$package_name.desktop"
 install -d -m 755 /usr/local/lib/cindy-cloud-desktop
+install -m 644 "$work/chrome.version" /usr/local/lib/cindy-cloud-desktop/chrome.version
+install -d -m 755 /etc/xdg/xfce4
+cat >/etc/xdg/xfce-mimeapps.list <<'MIME'
+[Default Applications]
+x-scheme-handler/http=google-chrome.desktop;
+x-scheme-handler/https=google-chrome.desktop;
+text/html=google-chrome.desktop;
+MIME
+cat >/etc/xdg/xfce4/helpers.rc <<'XFCE'
+WebBrowser=google-chrome
+XFCE
 cat >/usr/local/lib/cindy-cloud-desktop/session <<'SESSION'
 #!/bin/bash
 set -euo pipefail
 umask 077
 export XDG_SESSION_TYPE=x11 XDG_CURRENT_DESKTOP=XFCE DESKTOP_SESSION=xfce
+# Enable GTK's AT-SPI bridge inside this authenticated desktop session.
+export GTK_A11Y=atspi
+unset NO_AT_BRIDGE
+# D-Bus-activated desktop apps need the display and Xauthority created by xvfb-run.
+dbus-update-activation-environment --systemd DISPLAY XAUTHORITY \
+  XDG_SESSION_TYPE XDG_CURRENT_DESKTOP DESKTOP_SESSION GTK_A11Y
 state="$HOME/.local/state/cindy-cloud-desktop"
 mkdir -p "$state"
 # Generated separately on every machine. Store beside the desktop user's private state.

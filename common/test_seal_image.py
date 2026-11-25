@@ -29,6 +29,22 @@ class SealImageTest(unittest.TestCase):
             self.assertTrue(user.exists() and host_key.exists())
             user.unlink()
             user.parent.rmdir()
+            for name in (
+                ".config/google-chrome/Default/History",
+                ".cache/google-chrome/Default/Cache_Data/index",
+                ".pki/nssdb/cert9.db",
+                ".mozilla/firefox/profiles.ini",
+                "snap/firefox/common/.mozilla/firefox/profiles.ini",
+            ):
+                browser_state = write("home/ubuntu/" + name)
+                with self.assertRaisesRegex(ValueError, "User or enrollment material"):
+                    module.seal(root)
+                self.assertTrue(browser_state.exists() and host_key.exists())
+                browser_state.unlink()
+                parent = browser_state.parent
+                while parent != root / "home/ubuntu" and not any(parent.iterdir()):
+                    parent.rmdir()
+                    parent = parent.parent
             snap_state = write("var/lib/snapd/state.json", '{"data":{"auth":{"device":{"key-id":"builder"}}}}')
             with self.assertRaisesRegex(ValueError, "Snap account or device"):
                 module.seal(root)
