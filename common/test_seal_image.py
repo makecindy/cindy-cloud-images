@@ -30,6 +30,8 @@ class SealImageTest(unittest.TestCase):
             user.unlink()
             user.parent.rmdir()
             for name in (
+                ".config/CindyGlobal/auto-update-settings.json",
+                ".config/CindyDev/auto-update-settings.json",
                 ".config/google-chrome/Default/History",
                 ".cache/google-chrome/Default/Cache_Data/index",
                 ".pki/nssdb/cert9.db",

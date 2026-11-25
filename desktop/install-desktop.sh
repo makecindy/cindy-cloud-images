@@ -36,7 +36,7 @@ apt-get install -y --no-install-recommends \
   xfce4 xfce4-terminal greybird-gtk-theme papirus-icon-theme \
   mousepad evince file-roller xdg-utils \
   dbus-x11 dbus-user-session libglib2.0-bin xauth xvfb x11-utils xclip xdotool \
-  openssl gnome-keyring libsecret-tools at-spi2-core libxtst6 \
+  openssl gnome-keyring libsecret-tools at-spi2-core libxtst6 pkexec \
   curl jq ca-certificates gpg gpg-agent libgl1-mesa-dri \
   fonts-noto-cjk fonts-noto-color-emoji locales tzdata firefox \
   git rsync ripgrep unzip zip
@@ -89,6 +89,20 @@ echo "$hash  $work/cindy.deb" | sha256sum --check --status
 package_name=$(dpkg-deb --field "$work/cindy.deb" Package)
 case $package_name in cindy|cindydev) ;; *) echo 'Unexpected Cindy desktop package' >&2; exit 1 ;; esac
 apt-get install -y "$work/cindy.deb"
+# Cindy's updater replaces its system package through pkexec. The desktop user already has
+# passwordless sudo on this machine, so let its pkexec requests through without an
+# authentication agent; otherwise unattended updates stop at a password prompt nobody sees.
+cat >"$work/cindy-update.rules" <<'POLKIT'
+// Cindy cloud desktop: the desktop user already has passwordless sudo.
+// Lets Cindy's updater run pkexec unattended so idle auto-install works.
+polkit.addRule(function(action, subject) {
+  if (action.id == "org.freedesktop.policykit.exec" && subject.user == "ubuntu") {
+    return polkit.Result.YES;
+  }
+});
+POLKIT
+mkdir -p /etc/polkit-1/rules.d
+install -o root -g root -m 644 "$work/cindy-update.rules" /etc/polkit-1/rules.d/49-cindy-cloud-desktop-update.rules
 bash "$desktop_dir/install-appearance.sh" "/usr/share/applications/$package_name.desktop"
 install -d -m 755 /usr/local/lib/cindy-cloud-desktop
 install -m 644 "$work/chrome.version" /usr/local/lib/cindy-cloud-desktop/chrome.version
@@ -165,6 +179,22 @@ if [[ $# -ne 0 ]]; then
   printf 'LANG=%s\nCINDY_DISPLAY=%s\nTZ=%s\n' "$lang" "$display" "$3" >"$pending"
   chmod 644 "$pending"
   ln "$pending" "$defaults" 2>/dev/null || cmp -s "$pending" "$defaults" || exit 1
+fi
+# Nobody sits at a cloud desktop to restart Cindy after an update, so the first boot turns on
+# installing updates while idle. Written only when absent: the user's own choice always stays.
+build_info=/usr/lib/cindy/resources/linux-build-info
+if [[ -f $build_info ]]; then
+  mapfile -t build < "$build_info"
+  case ${build[3]:-} in
+    cn) user_data=Cindy ;;
+    global) user_data=CindyGlobal ;;
+    *) user_data= ;;
+  esac
+  if [[ -n $user_data ]]; then
+    runuser -u ubuntu -- bash -c 'umask 077 && set -C && cd "$2" && mkdir -p ".config/$1" &&
+      { [[ -e ".config/$1/auto-update-settings.json" ]] ||
+        printf "%s\n" "{\"autoRelaunchOnIdle\": true}" > ".config/$1/auto-update-settings.json"; }' _ "$user_data" ~ubuntu
+  fi
 fi
 loginctl enable-linger ubuntu
 uid=$(id -u ubuntu)
