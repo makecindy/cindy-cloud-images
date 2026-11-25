@@ -163,5 +163,29 @@ apt-get() { printf 'apt-get %s\\n' "$*" >> "$TEST_CALLS"; [[ $TEST_INSTALL_OK ==
         self.assertEqual(calls, [])
 
 
+class DesktopInstallStartupTest(unittest.TestCase):
+    def test_direct_install_queues_update_before_activation(self):
+        installer = Path(__file__).with_name("install-desktop.sh").read_text()
+        branch = 'if [[ $prepare_only = false ]]; then'
+        _, marker, code = installer.rpartition(branch)
+        self.assertTrue(marker, "The installer must have a direct-install branch")
+        script = """
+set -euo pipefail
+systemctl() { echo "$*"; }
+activate() { echo activate; }
+""" + branch + code.replace("/usr/local/lib/cindy-cloud-desktop/activate", "activate")
+        for prepare_only, expected in (
+            ("false", ["start --no-block cindy-cloud-desktop-update.service", "activate"]),
+            ("true", []),
+        ):
+            with self.subTest(prepare_only=prepare_only):
+                result = subprocess.run(
+                    ["bash", "-c", script],
+                    env=dict(os.environ, prepare_only=prepare_only),
+                    check=True, capture_output=True, text=True,
+                )
+                self.assertEqual(result.stdout.splitlines(), expected)
+
+
 if __name__ == "__main__":
     unittest.main()

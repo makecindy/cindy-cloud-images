@@ -289,5 +289,6 @@ if $prepare_only && compgen -G '/var/lib/snapd/device/private-keys-v1/*' >/dev/n
 fi
 printf '%s\n' "$hash" >/usr/local/lib/cindy-cloud-desktop/installer.sha256
 if [[ $prepare_only = false ]]; then
+  systemctl start --no-block cindy-cloud-desktop-update.service
   /usr/local/lib/cindy-cloud-desktop/activate
 fi
