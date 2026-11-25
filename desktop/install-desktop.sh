@@ -148,6 +148,10 @@ set -uo pipefail
 state=/var/lib/cindy-cloud-desktop
 build_info=/usr/lib/cindy/resources/linux-build-info
 log() { printf 'cindy-cloud-desktop-update: %s\n' "$*"; }
+# The desktop starts Cindy after 20 minutes at most. Replacing the package must never be cut short,
+# so it only begins within the first 10 minutes: with the package lock wait (at most 5 minutes)
+# it then ends well inside that window, and the unit's own time limit is only a backstop.
+install_by=$(( $(date +%s) + 600 ))
 install -d -m 755 "$state"
 work=$(mktemp -d)
 # The desktop session waits for this marker, so write it however the attempt ends.
@@ -179,8 +183,11 @@ if ! dpkg --compare-versions "$version" gt "$installed"; then
   log "Cindy $installed is current"
   exit 0
 fi
-# Abandon a stalled download instead of holding the desktop back.
-fetch --max-time 900 --speed-limit 51200 --speed-time 60 "$cdn/$file" -o "$work/cindy.deb" || { log 'Download failed'; exit 0; }
+# Abandon a stalled or late download instead of holding the desktop back.
+budget=$(( install_by - $(date +%s) ))
+(( budget >= 60 )) || { log 'No time left to download; keeping the baked release'; exit 0; }
+fetch --retry 0 --max-time "$budget" --speed-limit 51200 --speed-time 60 "$cdn/$file" -o "$work/cindy.deb" ||
+  { log 'Download failed'; exit 0; }
 actual=$(sha256sum "$work/cindy.deb" | cut -d ' ' -f 1)
 [[ $actual == "$hash" ]] || { log 'Digest mismatch'; exit 0; }
 field() { dpkg-deb --field "$work/cindy.deb" "$1"; }
@@ -188,9 +195,21 @@ if [[ $(field Package) != "$package" || $(field Architecture) != "$debian_arch" 
   log 'Package does not match the release manifest'
   exit 0
 fi
+if (( $(date +%s) > install_by )); then
+  log 'Too late to install before the desktop starts; keeping the baked release'
+  exit 0
+fi
 # A first boot can still hold the package lock for automatic updates.
-DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=300 install -y --no-install-recommends \
-  "$work/cindy.deb" || { log 'Install failed; keeping the baked release'; exit 0; }
+if ! DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=300 install -y --no-install-recommends \
+  "$work/cindy.deb"; then
+  # dpkg puts the old files back when unpacking fails. If it stopped while configuring instead,
+  # finish that so the package is not left half installed.
+  if [[ $(dpkg-query -W -f='${Status}' "$package") != 'install ok installed' ]]; then
+    DEBIAN_FRONTEND=noninteractive dpkg --configure --pending
+  fi
+  log "Install failed; Cindy is $(dpkg-query -W -f='${Version} (${Status})' "$package")"
+  exit 0
+fi
 log "Installed Cindy $version, replacing $installed"
 UPDATE
 chmod 755 /usr/local/lib/cindy-cloud-desktop/update
@@ -203,7 +222,7 @@ ConditionPathExists=!/var/lib/cindy-cloud-desktop/update.done
 [Service]
 Type=oneshot
 ExecStart=/usr/local/lib/cindy-cloud-desktop/update
-TimeoutStartSec=20min
+TimeoutStartSec=30min
 [Install]
 WantedBy=multi-user.target
 UNIT
