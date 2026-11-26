@@ -128,8 +128,19 @@ runuser() {
         invalid = self.activate_desktop("xx-YY", "1920x1080", "UTC", check=False)
         self.assertEqual(invalid.returncode, 2)
 
+        # Verify every supported locale is explicitly passed to locale-gen (not merely present in activate).
+        joined_installer = self.installer.replace("\\\n", " ")
+        locale_gen_lines = [
+            line.strip() for line in joined_installer.splitlines() if line.strip().startswith("locale-gen ")
+        ]
+        self.assertEqual(len(locale_gen_lines), 1)
+        locale_gen_args = set(locale_gen_lines[0].split()[1:])
         for lang, _ in expected.values():
-            self.assertIn(lang, self.installer)
+            self.assertIn(lang, locale_gen_args)
+        apt_install_lines = [
+            line.strip() for line in joined_installer.splitlines() if line.strip().startswith("apt-get install ")
+        ]
+        apt_packages = {token for line in apt_install_lines for token in line.split()}
         for pkg in (
             "language-pack-en",
             "language-pack-gnome-en",
@@ -150,5 +161,5 @@ runuser() {
             "language-pack-pt",
             "language-pack-gnome-pt",
         ):
-            self.assertIn(pkg, self.installer)
+            self.assertIn(pkg, apt_packages)
         self.assertIn("GTK_A11Y LANG LANGUAGE TZ", self.installer)

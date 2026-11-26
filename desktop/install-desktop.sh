@@ -300,7 +300,7 @@ if [[ $# -ne 0 ]]; then
   trap 'rm -f "$pending"' EXIT
   printf 'LANG=%s\nLANGUAGE=%s\nCINDY_DISPLAY=%s\nTZ=%s\n' "$lang" "$language" "$display" "$3" >"$pending"
   chmod 644 "$pending"
-  if ln "$pending" "$defaults" 2>/dev/null; then
+  if [[ ! -e $defaults ]]; then
     locale_dir=$(dirname -- "$locale_file")
     if [[ -d $locale_dir ]]; then
       locale_pending=$(mktemp "$locale_dir/.locale.XXXXXX")
@@ -309,9 +309,8 @@ if [[ $# -ne 0 ]]; then
       chmod 644 "$locale_pending"
       mv -f "$locale_pending" "$locale_file"
     fi
-  else
-    cmp -s "$pending" "$defaults" || exit 1
   fi
+  ln "$pending" "$defaults" 2>/dev/null || cmp -s "$pending" "$defaults" || exit 1
 fi
 # Nobody sits at a cloud desktop to restart Cindy after an update, so the first boot turns on
 # installing updates while idle. Written only when absent: the user's own choice always stays.
