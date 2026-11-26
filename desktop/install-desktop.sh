@@ -42,8 +42,18 @@ apt-get install -y --no-install-recommends \
   openssl gnome-keyring libsecret-tools at-spi2-core libxtst6 pkexec \
   curl jq ca-certificates gpg gpg-agent libgl1-mesa-dri \
   fonts-noto-cjk fonts-noto-color-emoji locales tzdata firefox \
+  language-pack-en language-pack-gnome-en \
+  language-pack-zh-hans language-pack-gnome-zh-hans \
+  language-pack-zh-hant language-pack-gnome-zh-hant \
+  language-pack-ja language-pack-gnome-ja \
+  language-pack-ko language-pack-gnome-ko \
+  language-pack-de language-pack-gnome-de \
+  language-pack-fr language-pack-gnome-fr \
+  language-pack-es language-pack-gnome-es \
+  language-pack-pt language-pack-gnome-pt \
   git rsync ripgrep unzip zip
-locale-gen en_US.UTF-8 zh_CN.UTF-8
+locale-gen en_US.UTF-8 zh_CN.UTF-8 zh_TW.UTF-8 ja_JP.UTF-8 ko_KR.UTF-8 \
+  de_DE.UTF-8 fr_FR.UTF-8 es_ES.UTF-8 pt_BR.UTF-8 pt_PT.UTF-8
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 chmod 755 "$work"
@@ -127,9 +137,9 @@ export XDG_SESSION_TYPE=x11 XDG_CURRENT_DESKTOP=XFCE DESKTOP_SESSION=xfce
 # Enable GTK's AT-SPI bridge inside this authenticated desktop session.
 export GTK_A11Y=atspi
 unset NO_AT_BRIDGE
-# D-Bus-activated desktop apps need the display and Xauthority created by xvfb-run.
+# D-Bus-activated desktop apps need the display, Xauthority, locale and timezone.
 dbus-update-activation-environment --systemd DISPLAY XAUTHORITY \
-  XDG_SESSION_TYPE XDG_CURRENT_DESKTOP DESKTOP_SESSION GTK_A11Y
+  XDG_SESSION_TYPE XDG_CURRENT_DESKTOP DESKTOP_SESSION GTK_A11Y LANG LANGUAGE TZ
 state="$HOME/.local/state/cindy-cloud-desktop"
 mkdir -p "$state"
 # Generated separately on every machine. Store beside the desktop user's private state.
@@ -267,16 +277,41 @@ set -euo pipefail
 # Only the first boot writes defaults. Retrying activation preserves the user's environment.
 if [[ $# -ne 0 ]]; then
   [[ $# -eq 3 ]] || exit 2
-  case $1 in zh-CN) lang=zh_CN.UTF-8 ;; en-US) lang=en_US.UTF-8 ;; *) exit 2 ;; esac
+  case $1 in
+    en-US) lang=en_US.UTF-8; language=en_US:en ;;
+    zh-CN) lang=zh_CN.UTF-8; language=zh_CN:zh ;;
+    zh-TW) lang=zh_TW.UTF-8; language=zh_TW:zh ;;
+    ja-JP) lang=ja_JP.UTF-8; language=ja_JP:ja ;;
+    ko-KR) lang=ko_KR.UTF-8; language=ko_KR:ko ;;
+    de-DE) lang=de_DE.UTF-8; language=de_DE:de ;;
+    fr-FR) lang=fr_FR.UTF-8; language=fr_FR:fr ;;
+    es-ES) lang=es_ES.UTF-8; language=es_ES:es ;;
+    pt-BR) lang=pt_BR.UTF-8; language=pt_BR:pt ;;
+    pt-PT) lang=pt_PT.UTF-8; language=pt_PT:pt ;;
+    *) exit 2 ;;
+  esac
   case $2 in 1600x1000|1920x1080) display=$2 ;; *) exit 2 ;; esac
   [[ $3 =~ ^[A-Za-z0-9_+-]+(/[A-Za-z0-9_+-]+)*$ && -f /usr/share/zoneinfo/$3 ]] || exit 2
-  install -d -m 755 /etc/cindy-cloud-desktop
-  defaults=/etc/cindy-cloud-desktop/defaults
-  pending=$(mktemp /etc/cindy-cloud-desktop/.defaults.XXXXXX)
+  defaults_dir=/etc/cindy-cloud-desktop
+  locale_file=/etc/default/locale
+  install -d -m 755 "$defaults_dir"
+  defaults="$defaults_dir/defaults"
+  pending=$(mktemp "$defaults_dir/.defaults.XXXXXX")
   trap 'rm -f "$pending"' EXIT
-  printf 'LANG=%s\nCINDY_DISPLAY=%s\nTZ=%s\n' "$lang" "$display" "$3" >"$pending"
+  printf 'LANG=%s\nLANGUAGE=%s\nCINDY_DISPLAY=%s\nTZ=%s\n' "$lang" "$language" "$display" "$3" >"$pending"
   chmod 644 "$pending"
-  ln "$pending" "$defaults" 2>/dev/null || cmp -s "$pending" "$defaults" || exit 1
+  if ln "$pending" "$defaults" 2>/dev/null; then
+    locale_dir=$(dirname -- "$locale_file")
+    if [[ -d $locale_dir ]]; then
+      locale_pending=$(mktemp "$locale_dir/.locale.XXXXXX")
+      trap 'rm -f "$pending" "$locale_pending"' EXIT
+      printf 'LANG=%s\nLANGUAGE=%s\n' "$lang" "$language" >"$locale_pending"
+      chmod 644 "$locale_pending"
+      mv -f "$locale_pending" "$locale_file"
+    fi
+  else
+    cmp -s "$pending" "$defaults" || exit 1
+  fi
 fi
 # Nobody sits at a cloud desktop to restart Cindy after an update, so the first boot turns on
 # installing updates while idle. Written only when absent: the user's own choice always stays.
