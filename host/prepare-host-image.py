@@ -104,10 +104,11 @@ def install(release, root, expected, edition, arch):
     script.parent.mkdir(parents=True, exist_ok=True)
     script.write_bytes(Path(__file__).with_name("host-keyring.sh").read_bytes())
     script.chmod(0o755)
-    ssh = root / "etc/ssh/sshd_config.d/00-cindy-cloud-owner.conf"
-    ssh.parent.mkdir(parents=True, exist_ok=True)
-    ssh.write_text(
-        "AuthorizedKeysFile .ssh/cindy-owner-authorized-keys\nAuthorizedKeysCommand none\nPermitRootLogin no\nPasswordAuthentication no\nKbdInteractiveAuthentication no\nExposeAuthInfo yes\n"
+    ssh_access_gate.write_file(
+        root,
+        root / "etc/ssh/sshd_config.d/00-cindy-cloud-owner.conf",
+        "AuthorizedKeysFile .ssh/cindy-owner-authorized-keys\nAuthorizedKeysCommand none\nPermitRootLogin no\nPasswordAuthentication no\nKbdInteractiveAuthentication no\nExposeAuthInfo yes\n",
+        0o644,
     )
     # Cindy keeps the owner's device keys in that file; recheck them at boot before sshd lets anyone in.
     ssh_access_gate.install(root)
