@@ -14,6 +14,7 @@ Usage: ssh_access_gate.py ROOT   (ROOT is / on a running builder, or an offline 
 import os
 from pathlib import Path
 import sys
+import tempfile
 
 MARKER = "# Managed by Cindy SSH access; manual edits are overwritten."
 GATE_PATH = "usr/local/lib/cindy-cloud-ssh/gate"
@@ -35,7 +36,9 @@ case ${{1:-}} in
     ;;
   release)
     [[ -f $held && ! -L $held ]] || exit 0
-    if [[ -e $keys || -L $keys ]]; then rm -f -- "$held"; else mv -- "$held" "$keys"; fi
+    # Restore by hard link, not mv: a link never replaces a list Cindy writes back meanwhile.
+    [[ -e $keys || -L $keys ]] || ln -- "$held" "$keys" || [[ -e $keys || -L $keys ]]
+    rm -f -- "$held"
     ;;
   *)
     echo 'usage: gate hold|release' >&2
@@ -90,25 +93,32 @@ def _inside(root, path):
         raise ValueError("Unexpected link in image root: %s" % path)
 
 
-def _write(root, path, text, mode):
+def write_file(root, path, text, mode):
+    """Writes a regular file inside the image root; a link left in the image never redirects the write."""
     _inside(root, path)
     if path.is_symlink():
         raise ValueError("Unexpected link in image root: %s" % path)
     path.parent.mkdir(parents=True, exist_ok=True)
     if not (path.is_file() and path.read_text() == text):
-        staged = path.with_name("." + path.name + ".new")
-        staged.write_text(text)
-        staged.chmod(mode)
-        os.replace(staged, path)
+        # Created exclusively under a fresh name, so nothing already in the image can stand in for it.
+        descriptor, staged = tempfile.mkstemp(prefix="." + path.name + ".", dir=path.parent)
+        try:
+            with os.fdopen(descriptor, "w") as out:
+                out.write(text)
+                os.fchmod(out.fileno(), mode)
+            os.replace(staged, path)
+        except BaseException:
+            Path(staged).unlink(missing_ok=True)
+            raise
     path.chmod(mode)
 
 
 def install(root):
     root = Path(root).resolve()
-    _write(root, root / GATE_PATH, GATE, 0o755)
+    write_file(root, root / GATE_PATH, GATE, 0o755)
     system = root / "etc/systemd/system"
     for name, text in UNITS.items():
-        _write(root, system / name, text, 0o644)
+        write_file(root, system / name, text, 0o644)
     for wants, name in WANTS.items():
         link = system / wants / name
         target = "/etc/systemd/system/" + name

@@ -42,10 +42,18 @@ class HostImageTest(unittest.TestCase):
             )
             self.assertFalse((root / "home").exists())
             self.assertFalse((root / "etc/systemd/user/default.target.wants").exists())
-            sshd = (root / "etc/ssh/sshd_config.d/00-cindy-cloud-owner.conf").read_text()
-            self.assertIn("AuthorizedKeysFile .ssh/cindy-owner-authorized-keys", sshd)
-            self.assertIn("ExposeAuthInfo yes", sshd)
+            sshd = root / "etc/ssh/sshd_config.d/00-cindy-cloud-owner.conf"
+            self.assertIn("AuthorizedKeysFile .ssh/cindy-owner-authorized-keys", sshd.read_text())
+            self.assertIn("ExposeAuthInfo yes", sshd.read_text())
             self.assertTrue((root / "etc/systemd/system/sockets.target.wants/cindy-ssh-access-gate.service").is_symlink())
+            outside = Path(work).resolve() / "outside"
+            outside.write_text("outside")
+            sshd.unlink()
+            sshd.symlink_to(outside)
+            with self.assertRaises(ValueError):
+                image.install(release, root, pin, "cn", "x64")
+            self.assertEqual(outside.read_text(), "outside")
+            sshd.unlink()
             (root / "opt/cindy-cloud-host" / pin / "extra").touch()
             with self.assertRaises(ValueError):
                 image.install(release, root, pin, "cn", "x64")
