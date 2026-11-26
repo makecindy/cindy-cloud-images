@@ -37,6 +37,7 @@ class SealImageTest(unittest.TestCase):
                 ".pki/nssdb/cert9.db",
                 ".mozilla/firefox/profiles.ini",
                 "snap/firefox/common/.mozilla/firefox/profiles.ini",
+                ".ssh/cindy-owner-authorized-keys.held",
             ):
                 browser_state = write("home/ubuntu/" + name)
                 with self.assertRaisesRegex(ValueError, "User or enrollment material"):
