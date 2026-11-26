@@ -25,7 +25,10 @@ AuthorizedKeysCommand none
 PermitRootLogin no
 PasswordAuthentication no
 KbdInteractiveAuthentication no
+ExposeAuthInfo yes
 SSH
+  # Cindy keeps the owner's device keys in that file; recheck them at boot before sshd lets anyone in.
+  python3 "$desktop_dir/../common/ssh_access_gate.py" /
 fi
 id ubuntu >/dev/null
 exec 9>/run/lock/cindy-cloud-desktop-install

@@ -39,6 +39,7 @@ def seal(root):
         ".mozilla/firefox",
         "snap/firefox",
         ".ssh/cindy-owner-authorized-keys",
+        ".ssh/cindy-owner-authorized-keys.held",
     ):
         if checked(str(owner.relative_to(root) / name)).exists():
             raise ValueError("User or enrollment material present in builder: " + name)

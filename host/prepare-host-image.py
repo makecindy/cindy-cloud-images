@@ -8,6 +8,14 @@ import os
 from pathlib import Path
 import re
 import tempfile
+import sys
+
+# Shipped next to this script on the builder; common/ in the repository.
+for _dir in (Path(__file__).resolve().parent, Path(__file__).resolve().parent.parent / "common"):
+    if (_dir / "ssh_access_gate.py").is_file():
+        sys.path.insert(0, str(_dir))
+        break
+import ssh_access_gate  # noqa: E402
 
 
 def digest(path):
@@ -99,8 +107,10 @@ def install(release, root, expected, edition, arch):
     ssh = root / "etc/ssh/sshd_config.d/00-cindy-cloud-owner.conf"
     ssh.parent.mkdir(parents=True, exist_ok=True)
     ssh.write_text(
-        "AuthorizedKeysFile .ssh/cindy-owner-authorized-keys\nAuthorizedKeysCommand none\nPermitRootLogin no\nPasswordAuthentication no\nKbdInteractiveAuthentication no\n"
+        "AuthorizedKeysFile .ssh/cindy-owner-authorized-keys\nAuthorizedKeysCommand none\nPermitRootLogin no\nPasswordAuthentication no\nKbdInteractiveAuthentication no\nExposeAuthInfo yes\n"
     )
+    # Cindy keeps the owner's device keys in that file; recheck them at boot before sshd lets anyone in.
+    ssh_access_gate.install(root)
     unit.parent.mkdir(parents=True, exist_ok=True)
     content = f"""[Unit]
 Description=Cindy Cloud Host

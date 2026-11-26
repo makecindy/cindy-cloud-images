@@ -43,7 +43,7 @@ For either edition, seal the **powered-off image** on the separate machine. Use 
 sudo python3 common/seal-offline-image.py --offline-root "$IMAGE_ROOT"
 ```
 
-Sealing rejects known Cindy enrollment files, keyring state, browser profiles and Snap credentials. It clears builder identities, SSH host keys and cloud-init state so each new instance starts with its own identity. Unmount the sealed volume before snapshotting it. Use the [Cindy readiness checklist](docs/cindy-readiness.md) to validate disposable clones and record the release evidence.
+Both images restrict sshd to `~ubuntu/.ssh/cindy-owner-authorized-keys`, which Cindy on the machine maintains for the owner's devices, and install a boot gate (`common/ssh_access_gate.py`) that holds a Cindy-written key list until Cindy has rechecked the device list. Sealing rejects known Cindy enrollment files, keyring state, browser profiles and Snap credentials. It clears builder identities, SSH host keys and cloud-init state so each new instance starts with its own identity. Unmount the sealed volume before snapshotting it. Use the [Cindy readiness checklist](docs/cindy-readiness.md) to validate disposable clones and record the release evidence.
 
 ## Local checks
 
