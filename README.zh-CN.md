@@ -7,6 +7,7 @@
 </p>
 
 <p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="许可证" /></a>
   <a href="https://github.com/makecindy/cindy-cloud-images/actions/workflows/check.yml"><img src="https://github.com/makecindy/cindy-cloud-images/actions/workflows/check.yml/badge.svg" alt="镜像配方检查" /></a>
   <img src="https://img.shields.io/badge/Ubuntu-24.04-E95420.svg?logo=ubuntu&logoColor=white" alt="Ubuntu 24.04" />
   <img src="https://img.shields.io/badge/arch-x64%20%7C%20arm64-555.svg" alt="x64 和 arm64" />
@@ -119,4 +120,10 @@ docs/      交付验收清单和制镜机维护
 
 ## 发布须知
 
-凭据、租户配置、私有镜像标识、用户机器上的数据、二进制安装包和磁盘镜像，都保存在各自的发布或部署系统里。公开仓库前，先选定源码许可证，并审阅计划发布的各项制品的分发条款。
+凭据、租户配置、私有镜像标识、用户机器上的数据、二进制安装包和磁盘镜像，都保存在各自的发布或部署系统里。计划发布的各项制品，发布前先审阅它的分发条款。
+
+## 许可证
+
+除非另有说明，本仓库的源代码依据 [Apache License 2.0](LICENSE) 授权。源文件不单独携带许可证头，统一以仓库根目录的 `LICENSE` 为准。本项目的版权信息见 [`NOTICE`](NOTICE)。
+
+Cindy 名称、Logo 和字标，[Cindy Whisper 壁纸](desktop/appearance/cindy-whisper.jpg)，以及 [`.github/assets/`](.github/assets/) 下的图片属于品牌素材，不在根目录 Apache-2.0 的授权范围内。配方安装的软件（如 Ubuntu 软件包、Google Chrome 和 Firefox）保留各自的版权与许可条款。

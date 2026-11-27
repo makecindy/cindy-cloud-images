@@ -7,6 +7,7 @@
 </p>
 
 <p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="License" /></a>
   <a href="https://github.com/makecindy/cindy-cloud-images/actions/workflows/check.yml"><img src="https://github.com/makecindy/cindy-cloud-images/actions/workflows/check.yml/badge.svg" alt="Image recipe checks" /></a>
   <img src="https://img.shields.io/badge/Ubuntu-24.04-E95420.svg?logo=ubuntu&logoColor=white" alt="Ubuntu 24.04" />
   <img src="https://img.shields.io/badge/arch-x64%20%7C%20arm64-555.svg" alt="x64 and arm64" />
@@ -125,4 +126,10 @@ Run `make test` with Bash, Make and Python 3.9+ on a development machine. The te
 
 ## Publication
 
-Keep credentials, tenant configuration, private image identifiers, guest data, binary packages and disk images in their respective release or deployment systems. Before opening the repository, select a source license and review the distribution terms for any artifacts planned for publication.
+Keep credentials, tenant configuration, private image identifiers, guest data, binary packages and disk images in their respective release or deployment systems. Review the distribution terms for any artifacts planned for publication.
+
+## License
+
+Except as otherwise noted, the source code in this repository is licensed under the [Apache License, Version 2.0](LICENSE). Individual source files do not carry per-file license headers; the repository-root `LICENSE` governs. See [`NOTICE`](NOTICE) for this project's copyright information.
+
+The Cindy name, logo and wordmark, the [Cindy Whisper wallpaper](desktop/appearance/cindy-whisper.jpg) and the images under [`.github/assets/`](.github/assets/) are brand assets. They are not covered by the repository-level Apache-2.0 grant. Software that the recipes install, such as Ubuntu packages, Google Chrome and Firefox, keeps its own copyright and license terms.
